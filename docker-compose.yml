@@ -1,0 +1,15 @@
+services:
+  postgres:
+    image: postgres:17-alpine
+    container_name: skylark-postgres
+    environment:
+      POSTGRES_USER: skylark
+      POSTGRES_PASSWORD: skylark
+      POSTGRES_DB: skylark
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+
+volumes:
+  pgdata:

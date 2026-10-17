@@ -1,0 +1,517 @@
+<title>Skylark Engineering Handoff</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;700&family=Source+Sans+3:ital,wght@0,400;0,600;1,400&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+  :root {
+    --ground: #ffffff;
+    --surface: #f5f8fc;
+    --surface-2: #eef3f9;
+    --ink: #101a2b;
+    --ink-2: #33445e;
+    --muted: #5d6f8a;
+    --line: #dde5ef;
+    --line-strong: #c3d0e0;
+    --accent: #1d4ed8;
+    --accent-soft: #e8eefc;
+    --good: #04785f;
+    --good-soft: #e2f4ef;
+    --warn: #a2570b;
+    --warn-soft: #fbeedc;
+    --critical: #b3123c;
+    --critical-soft: #fce9ee;
+    --display: "Archivo", "Segoe UI", sans-serif;
+    --body: "Source Sans 3", "Segoe UI", sans-serif;
+    --mono: "JetBrains Mono", ui-monospace, "Cascadia Mono", monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --ground: #0a1020;
+      --surface: #101a2e;
+      --surface-2: #16233b;
+      --ink: #dfe7f4;
+      --ink-2: #b3c2d8;
+      --muted: #8397b3;
+      --line: #1f2d45;
+      --line-strong: #2d4059;
+      --accent: #7ea7ff;
+      --accent-soft: #16233f;
+      --good: #4bc7a5;
+      --good-soft: #102a26;
+      --warn: #e0a256;
+      --warn-soft: #2d2114;
+      --critical: #f2708f;
+      --critical-soft: #2e1420;
+    }
+  }
+  :root[data-theme="dark"] {
+    --ground: #0a1020;
+    --surface: #101a2e;
+    --surface-2: #16233b;
+    --ink: #dfe7f4;
+    --ink-2: #b3c2d8;
+    --muted: #8397b3;
+    --line: #1f2d45;
+    --line-strong: #2d4059;
+    --accent: #7ea7ff;
+    --accent-soft: #16233f;
+    --good: #4bc7a5;
+    --good-soft: #102a26;
+    --warn: #e0a256;
+    --warn-soft: #2d2114;
+    --critical: #f2708f;
+    --critical-soft: #2e1420;
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--ground);
+    color: var(--ink);
+    font-family: var(--body);
+    font-size: 16.5px;
+    line-height: 1.65;
+    -webkit-font-smoothing: antialiased;
+  }
+  a { color: var(--accent); }
+  :focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; border-radius: 3px; }
+
+  .shell { display: grid; grid-template-columns: 236px minmax(0, 1fr); gap: 56px; max-width: 1180px; margin: 0 auto; padding: 0 32px; }
+
+  /* ── masthead ── */
+  .masthead { border-bottom: 1px solid var(--line); background: var(--surface); }
+  .masthead-inner { max-width: 1180px; margin: 0 auto; padding: 40px 32px 34px; }
+  .eyebrow { font-family: var(--mono); font-size: 11.5px; letter-spacing: .14em; text-transform: uppercase; color: var(--muted); }
+  h1 { font-family: var(--display); font-size: clamp(30px, 4.4vw, 44px); font-weight: 700; letter-spacing: -.028em; line-height: 1.05; margin: 12px 0 0; text-wrap: balance; }
+  .standfirst { margin: 14px 0 0; max-width: 62ch; font-size: 18px; color: var(--ink-2); }
+  .meta-row { display: flex; flex-wrap: wrap; gap: 10px 26px; margin-top: 22px; font-family: var(--mono); font-size: 12px; color: var(--muted); }
+  .meta-row b { color: var(--ink-2); font-weight: 500; }
+
+  /* ── nav rail ── */
+  nav { position: sticky; top: 0; align-self: start; padding: 44px 0; }
+  nav ol { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px; }
+  nav a { display: block; padding: 5px 10px; border-left: 2px solid var(--line); color: var(--muted); text-decoration: none; font-size: 14px; }
+  nav a:hover { color: var(--ink); border-left-color: var(--accent); background: var(--surface); }
+
+  /* ── content ── */
+  main { padding: 44px 0 96px; min-width: 0; }
+  section { margin-bottom: 60px; scroll-margin-top: 20px; }
+  h2 { font-family: var(--display); font-size: 25px; font-weight: 600; letter-spacing: -.02em; margin: 0 0 6px; text-wrap: balance; }
+  h3 { font-family: var(--display); font-size: 17px; font-weight: 600; letter-spacing: -.01em; margin: 30px 0 8px; }
+  .lede { color: var(--muted); margin: 0 0 22px; max-width: 68ch; }
+  p { max-width: 68ch; margin: 0 0 14px; }
+  ul, ol { max-width: 68ch; padding-left: 20px; margin: 0 0 14px; }
+  li { margin-bottom: 7px; }
+  code { font-family: var(--mono); font-size: .86em; background: var(--surface-2); padding: 1px 5px; border-radius: 4px; }
+  strong { font-weight: 600; }
+
+  pre { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 16px 18px; overflow-x: auto; font-family: var(--mono); font-size: 13px; line-height: 1.75; margin: 0 0 18px; color: var(--ink-2); }
+  pre .c { color: var(--muted); }
+
+  .table-wrap { overflow-x: auto; margin-bottom: 18px; border: 1px solid var(--line); border-radius: 10px; }
+  table { width: 100%; border-collapse: collapse; font-size: 14.5px; }
+  th { text-align: left; font-family: var(--mono); font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); font-weight: 500; padding: 11px 14px; background: var(--surface); border-bottom: 1px solid var(--line); }
+  td { padding: 11px 14px; border-bottom: 1px solid var(--line); vertical-align: top; font-variant-numeric: tabular-nums; }
+  tr:last-child td { border-bottom: 0; }
+  td code { background: none; padding: 0; color: var(--accent); }
+
+  .chip { display: inline-block; font-family: var(--mono); font-size: 11px; padding: 2px 8px; border-radius: 20px; white-space: nowrap; }
+  .chip-good { background: var(--good-soft); color: var(--good); }
+  .chip-warn { background: var(--warn-soft); color: var(--warn); }
+  .chip-off { background: var(--surface-2); color: var(--muted); }
+
+  /* severity stripe encodes "how bad if you break this" */
+  .note { border-left: 3px solid var(--line-strong); background: var(--surface); padding: 14px 18px; border-radius: 0 8px 8px 0; margin: 0 0 18px; max-width: 68ch; }
+  .note p:last-child { margin-bottom: 0; }
+  .note-critical { border-left-color: var(--critical); background: var(--critical-soft); }
+  .note-warn { border-left-color: var(--warn); background: var(--warn-soft); }
+  .note-title { font-family: var(--display); font-weight: 600; font-size: 15px; margin-bottom: 4px; }
+  .note-critical .note-title { color: var(--critical); }
+  .note-warn .note-title { color: var(--warn); }
+
+  .flow { display: flex; flex-direction: column; gap: 0; margin: 0 0 20px; font-family: var(--mono); font-size: 13px; }
+  .flow-step { display: flex; gap: 14px; align-items: baseline; padding: 9px 0; border-bottom: 1px dashed var(--line); }
+  .flow-step:last-child { border-bottom: 0; }
+  .flow-n { color: var(--accent); width: 18px; flex: none; }
+  .flow-b { color: var(--muted); }
+
+  .cards { display: grid; gap: 14px; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); margin-bottom: 20px; }
+  .card { border: 1px solid var(--line); border-radius: 10px; padding: 16px 18px; background: var(--surface); }
+  .card h4 { font-family: var(--display); font-size: 15px; font-weight: 600; margin: 0 0 5px; }
+  .card p { font-size: 14px; color: var(--muted); margin: 0; max-width: none; }
+
+  footer { border-top: 1px solid var(--line); margin-top: 24px; padding: 26px 0 60px; color: var(--muted); font-size: 13.5px; }
+
+  @media (max-width: 900px) {
+    .shell { grid-template-columns: 1fr; gap: 0; }
+    nav { position: static; padding: 24px 0 0; }
+    nav ol { flex-direction: row; flex-wrap: wrap; gap: 6px; }
+    nav a { border-left: 0; border: 1px solid var(--line); border-radius: 20px; padding: 4px 12px; }
+    main { padding-top: 28px; }
+  }
+  @media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; } }
+</style>
+
+<header class="masthead">
+  <div class="masthead-inner">
+    <div class="eyebrow">Engineering handoff</div>
+    <h1>Skylark — a metered X data API</h1>
+    <p class="standfirst">
+      Customers call our endpoints with an API key. We serve from cache or fetch from an
+      upstream scraper, return the data, meter the call, and bill it against a credit
+      balance. This is what exists, why it's shaped this way, and what will bite you.
+    </p>
+    <div class="meta-row">
+      <span><b>Stack</b> Next.js 16 · React 19 · TypeScript · Postgres 17 · Drizzle</span>
+      <span><b>Tables</b> 11</span>
+      <span><b>Status</b> local only, no production deploy</span>
+    </div>
+  </div>
+</header>
+
+<div class="shell">
+  <nav>
+    <ol>
+      <li><a href="#shape">The shape of it</a></li>
+      <li><a href="#run">Running it</a></li>
+      <li><a href="#map">Where things live</a></li>
+      <li><a href="#data">Data model</a></li>
+      <li><a href="#money">Money invariants</a></li>
+      <li><a href="#status">What's built</a></li>
+      <li><a href="#verify">Verifying it works</a></li>
+      <li><a href="#traps">Traps</a></li>
+      <li><a href="#next">What's next</a></li>
+    </ol>
+  </nav>
+
+  <main>
+    <section id="shape">
+      <h2>The shape of it</h2>
+      <p class="lede">Two programs, two repositories, one dependency between them.</p>
+
+      <div class="cards">
+        <div class="card">
+          <h4>twitterapi</h4>
+          <p>The product: landing page, Google sign-in, customer dashboard, staff console, and the metered API itself. Runs on :3000.</p>
+        </div>
+        <div class="card">
+          <h4>skylark-mock-provider</h4>
+          <p>A sibling directory standing in for the paid scraper. Real HTTP, auth, pagination, rate limits, injectable faults. Zero dependencies. Runs on :4000.</p>
+        </div>
+      </div>
+
+      <p>
+        The provider is deliberately a <strong>separate process</strong>, not an in-process stub.
+        That means the client code exercises real request building, timeouts, retries and error
+        classification — so pointing at a paid scraper is a base URL and a key, not a rewrite.
+        If it isn't running, the API returns 502. That's correct.
+      </p>
+
+      <h3>One request, end to end</h3>
+      <div class="flow">
+        <div class="flow-step"><span class="flow-n">1</span><span>Hash the <code>X-API-Key</code>, look it up <span class="flow-b">→ org, plan, status</span></span></div>
+        <div class="flow-step"><span class="flow-n">2</span><span>Rate limit, then credit balance <span class="flow-b">→ 429 / 402 if exceeded, both logged</span></span></div>
+        <div class="flow-step"><span class="flow-n">3</span><span>Look up <code>response_cache</code> by params hash <span class="flow-b">→ hit: serve immediately</span></span></div>
+        <div class="flow-step"><span class="flow-n">4</span><span>Miss: write a <code>fetch_jobs</code> row, call the provider over HTTP <span class="flow-b">→ retry, then cache</span></span></div>
+        <div class="flow-step"><span class="flow-n">5</span><span>Write <code>api_requests</code> + debit <code>credit_ledger</code> <span class="flow-b">→ same transaction, always</span></span></div>
+      </div>
+
+      <div class="note">
+        <div class="note-title">The cache is the business model</div>
+        <p>
+          A cache hit costs nothing upstream but still bills the customer — measured at roughly
+          7× faster than a miss. That gap between the $0.15 charged and the ~$0.03 paid upstream
+          is the margin, and the cache is what widens it. It is keyed by query alone, so it is
+          shared across organizations: one customer's search warms it for the next.
+        </p>
+      </div>
+    </section>
+
+    <section id="run">
+      <h2>Running it</h2>
+      <p class="lede">Three terminals. Everything is local — no cloud account, no payment provider, no traffic to X.</p>
+
+      <pre><span class="c"># 1 — database</span>
+pnpm db:up            <span class="c"># Postgres 17 in Docker</span>
+pnpm db:migrate       <span class="c"># apply db/migrations/*.sql</span>
+
+<span class="c"># 2 — upstream data provider (separate directory)</span>
+cd ../skylark-mock-provider && node server.js
+
+<span class="c"># 3 — the app</span>
+pnpm dev              <span class="c"># http://localhost:3000</span></pre>
+
+      <p>
+        Sign in at <code>/signin</code>. Without Google credentials configured, dev builds offer a
+        local email login that runs the identical provisioning path — first sign-in creates the
+        user, a personal organization on the free plan, an owner membership and a $0.10 signup
+        bonus, in one transaction. Production refuses to register that login at all.
+      </p>
+      <p>
+        Then create an API key on the dashboard (shown once), and
+        <code>pnpm staff you@example.com</code> to reach the admin console at <code>/admin</code>.
+      </p>
+
+      <h3>Environment</h3>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Variable</th><th>Purpose</th></tr></thead>
+          <tbody>
+            <tr><td><code>DATABASE_URL</code></td><td>Postgres connection</td></tr>
+            <tr><td><code>AUTH_SECRET</code></td><td>Session signing</td></tr>
+            <tr><td><code>AUTH_GOOGLE_ID / _SECRET</code></td><td>Optional; without them the dev login appears</td></tr>
+            <tr><td><code>PROVIDER_BASE_URL</code></td><td>Upstream data source, <code>http://localhost:4000</code></td></tr>
+            <tr><td><code>PROVIDER_API_KEY</code></td><td>Sent as <code>X-Provider-Key</code></td></tr>
+            <tr><td><code>PROVIDER_TIMEOUT_MS / _MAX_ATTEMPTS</code></td><td>5000 / 3</td></tr>
+            <tr><td><code>CRON_SECRET</code></td><td>Bearer token for the reconciliation job</td></tr>
+            <tr><td><code>BILLING_IBAN</code> and friends</td><td><strong>Placeholders.</strong> Fill in before inviting anyone to pay</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section id="map">
+      <h2>Where things live</h2>
+      <p class="lede">Two organising ideas: config that changes rarely lives in code, and components are grouped by who looks at them.</p>
+
+      <pre>app/
+  dashboard/          <span class="c">customer area — usage, billing, payment-methods, account</span>
+  admin/              <span class="c">staff console (+ orgs/[id])</span>
+  api/
+    x/tweet/search/   <span class="c">the metered endpoint</span>
+    webhooks/[provider]/   <span class="c">payment gateway callback</span>
+    cron/reconcile-topups/ <span class="c">safety net for lost webhooks</span>
+    usage/export/     <span class="c">CSV</span>
+components/  ui · marketing · dashboard · admin
+config/      plans · pricing · providers · billing   <span class="c">← config as code, not tables</span>
+lib/         apiAuth · authz · ledger · billing · usage · admin · rateLimit
+             providers/{client,tweets} · payments/gateway
+db/          schema.ts · migrations/ · index.ts
+scripts/     seed · make-staff · verify-ledger · verify-topup</pre>
+
+      <p>
+        <strong>Plans, endpoint pricing and the provider catalog are TypeScript, not database rows.</strong>
+        They change rarely, have no runtime state, and get free versioning and code review through git.
+        What was actually charged is still recorded on every <code>api_requests</code> row, so history
+        survives a price change. Promote any of them to a table the day you need to edit it at runtime.
+      </p>
+    </section>
+
+    <section id="data">
+      <h2>Data model</h2>
+      <p class="lede">Eleven tables. Everything hangs off an organization, never a user.</p>
+
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Table</th><th>Holds</th></tr></thead>
+          <tbody>
+            <tr><td><code>users</code></td><td>Keyed on Google's stable subject id, not email. Soft-deleted.</td></tr>
+            <tr><td><code>organizations</code></td><td>Plan, status, billing identity, spend caps, alert memory. The billing unit.</td></tr>
+            <tr><td><code>organization_members</code></td><td>owner / admin / member</td></tr>
+            <tr><td><code>api_keys</code></td><td>SHA-256 hash plus a display prefix. Live or test.</td></tr>
+            <tr><td><code>credit_ledger</code></td><td>Append-only. The source of truth for balance.</td></tr>
+            <tr><td><code>api_requests</code></td><td>One row per call, <em>including</em> rejected ones at zero cost.</td></tr>
+            <tr><td><code>fetch_jobs</code></td><td>One row per upstream call. Attempts, cost, failure kind.</td></tr>
+            <tr><td><code>response_cache</code></td><td>Keyed by params hash. The margin lever.</td></tr>
+            <tr><td><code>topup_requests</code></td><td>Customer asks to add credits; staff or a webhook fulfils.</td></tr>
+            <tr><td><code>webhook_events</code></td><td>Every gateway delivery, for dedupe and for disputes.</td></tr>
+            <tr><td><code>audit_logs</code></td><td>One generic activity table. Null actor means a system action.</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <p>
+        Every user gets a <strong>personal organization</strong> at signup, even alone. Retrofitting
+        that with live customers is painful; starting with it costs one extra table and makes the
+        Teams plan a matter of adding members.
+      </p>
+
+      <h3>Migrations</h3>
+      <p>
+        <code>db/schema.ts</code> is the source of truth. Generate with an explicit name —
+        <code>pnpm db:generate --name=what_it_does</code> — then <strong>read the SQL</strong> before
+        committing. Generated SQL adds columns but never knows how to fill them:
+        <code>0001_credit_buckets_and_alerts.sql</code> carries a hand-written backfill that classifies
+        existing ledger rows and recomputes running balances per bucket. Renaming a migration is safe
+        if you also update its <code>tag</code> in <code>meta/_journal.json</code> — the applied table
+        keys on a hash of file contents, not the filename. Never run <code>db:push</code> against real data.
+      </p>
+    </section>
+
+    <section id="money">
+      <h2>Money invariants</h2>
+      <p class="lede">If you change one thing carelessly, make it not be one of these.</p>
+
+      <div class="note note-critical">
+        <div class="note-title">Balance is derived, never stored</div>
+        <p>
+          There is no mutable <code>balance</code> column. The balance is the newest ledger row per
+          <code>(org, bucket)</code>, summed. Every write locks the organization row first, so
+          concurrent debits cannot compute the same <code>balance_after</code>. Ten simultaneous
+          debits have been tested: exact totals, no lost updates.
+        </p>
+      </div>
+
+      <div class="note note-critical">
+        <div class="note-title">A payment credits exactly once — enforced three ways</div>
+        <p>
+          The gateway's event id is unique on <code>webhook_events</code> and recorded <em>before</em>
+          any crediting. Fulfilment matches only <code>pending</code> or <code>processing</code> rows.
+          And <code>credit_ledger.source_id</code> carries a partial unique index, so a second credit
+          for the same top-up is <strong>rejected by Postgres</strong> regardless of application bugs.
+          Two concurrent "mark paid" calls have been tested: one credits, one returns null.
+        </p>
+      </div>
+
+      <div class="note note-warn">
+        <div class="note-title">Credit what was captured, not what was requested</div>
+        <p>
+          <code>amount_cents</code> is the customer's wish; <code>amount_received_cents</code> is the
+          gateway's fact, and it is what reaches the ledger. They diverge on currency conversion, fees
+          deducted at source, and customers transferring a different number.
+        </p>
+      </div>
+
+      <div class="note note-warn">
+        <div class="note-title">The browser never moves money</div>
+        <p>
+          A success redirect is a UX cue. Only a signature-verified server-to-server webhook — or a
+          human matching a bank reference — may credit. With no gateway configured, the webhook route
+          returns 503 and credits nothing, which is the safe default.
+        </p>
+      </div>
+
+      <div class="note">
+        <div class="note-title">Upstream failure is never the customer's bill</div>
+        <p>
+          A 502 is logged to <code>api_requests</code> at zero credits and the balance is untouched.
+          Meanwhile <code>upstream_cost_micros</code> records <em>every</em> attempt including retries,
+          because retries genuinely cost us — which keeps the admin margin figure honest.
+        </p>
+      </div>
+
+      <h3>Two credit buckets</h3>
+      <p>
+        Paid credits are deferred revenue and a real liability; bonus credits are marketing spend with
+        no cost basis. They are separate chains, consumed <strong>bonus-first</strong>, and a charge
+        that straddles both writes one row per bucket sharing the request id.
+      </p>
+    </section>
+
+    <section id="status">
+      <h2>What's built</h2>
+      <p class="lede">Honest state, including the parts that only look finished.</p>
+
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Area</th><th>State</th><th>Notes</th></tr></thead>
+          <tbody>
+            <tr><td>Metered API + billing</td><td><span class="chip chip-good">built</span></td><td>Auth, rate limit, cache, ledger, retries, failure handling</td></tr>
+            <tr><td>Sign-in + provisioning</td><td><span class="chip chip-good">built</span></td><td>Auth.js, JWT sessions; Google needs credentials</td></tr>
+            <tr><td>Customer dashboard</td><td><span class="chip chip-good">built</span></td><td>Usage, billing, payment methods, account</td></tr>
+            <tr><td>Admin console</td><td><span class="chip chip-good">built</span></td><td>Platform metrics, orgs, plans, suspension, credits, top-up queue</td></tr>
+            <tr><td>Manual billing</td><td><span class="chip chip-good">built</span></td><td>Top-up request → bank reference → staff marks paid</td></tr>
+            <tr><td>Payment gateway</td><td><span class="chip chip-warn">stubbed</span></td><td>Webhook, reconciliation and seam exist; <code>getGateway()</code> returns null</td></tr>
+            <tr><td>Balance alert emails</td><td><span class="chip chip-warn">partial</span></td><td>State machine works and audits; no email is sent</td></tr>
+            <tr><td>Provider failover</td><td><span class="chip chip-off">not built</span></td><td><code>pickProvider()</code> always returns the one provider</td></tr>
+            <tr><td>Team invitations</td><td><span class="chip chip-off">not built</span></td><td>Members table exists; no invite flow</td></tr>
+            <tr><td>Streams / webhooks product</td><td><span class="chip chip-off">not built</span></td><td>Advertised on the landing page only</td></tr>
+            <tr><td>Usage rollups</td><td><span class="chip chip-off">not built</span></td><td>Dashboards aggregate <code>api_requests</code> directly — fine at this volume</td></tr>
+            <tr><td>Deployment</td><td><span class="chip chip-off">not built</span></td><td>No hosting, no Dockerfile, no CI</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <p>
+        Only one API endpoint exists — <code>/api/x/tweet/search</code>. The landing page advertises
+        75+; treat that as marketing copy, not a claim about the codebase.
+      </p>
+    </section>
+
+    <section id="verify">
+      <h2>Verifying it works</h2>
+      <p class="lede">Two scripts cover the parts where a bug costs real money.</p>
+
+      <pre>npx tsx scripts/verify-ledger.ts   <span class="c"># balance chain + 10 concurrent debits</span>
+npx tsx scripts/verify-topup.ts    <span class="c"># exactly-once fulfilment + partial capture</span></pre>
+
+      <p>They assert, rather than print and hope: totals are exact, every <code>(bucket, balance)</code>
+      pair is distinct, each chain reconciles against the sum of its amounts, two simultaneous
+      fulfilments credit once, and $50 requested with $48.70 captured credits $48.70.</p>
+
+      <h3>Provoking failure</h3>
+      <p>Restart the provider in a fault mode and call the API — these paths are otherwise untestable:</p>
+      <pre>cd ../skylark-mock-provider
+npm run flaky                          <span class="c"># 30% fail  → retries, 502, no charge</span>
+FAIL_RATE=1 node server.js             <span class="c"># always fails → fetch_jobs = failed, 3 attempts</span>
+BASE_LATENCY_MS=9000 node server.js    <span class="c"># slower than timeout → timed_out</span></pre>
+      <p>Per-request faults work too: <code>_fail</code>, <code>_status</code>, <code>_latency</code>,
+      <code>_hang</code>, <code>_truncate</code>, <code>_empty</code>. See that project's README.</p>
+    </section>
+
+    <section id="traps">
+      <h2>Traps</h2>
+      <p class="lede">Things that cost time to discover once already.</p>
+
+      <ul>
+        <li><strong>Server actions can't be driven by curl.</strong> Next expects React Flight
+        encoding, so Roll/Revoke, the account forms and admin controls need a real browser click.
+        Their underlying functions are tested directly instead — that's why fulfilment logic lives in
+        <code>lib/billing.ts</code> rather than inside the action.</li>
+
+        <li><strong>Format money as <code>en-US</code> explicitly.</strong> A Norwegian server locale
+        rendered a balance as <code>$4,00</code>. Counts can follow the viewer; currency cannot.</li>
+
+        <li><strong>Timestamps must render client-side.</strong> Server components format in the
+        server's zone, which is UTC in production. <code>LocalTime</code> renders UTC then swaps after
+        hydration.</li>
+
+        <li><strong>Clever SQL through the ORM is where this codebase breaks.</strong> Drizzle renders
+        a column reference inside <code>sql</code> without its table prefix, producing an ambiguous
+        bare <code>"id"</code>; and parameterised intervals fail type inference. Both were fixed by
+        replacing one clever query with several flat ones.</li>
+
+        <li><strong>A long-lived dev server goes stale.</strong> After heavy edits and a database
+        wipe, every API call returned 500 while a fresh production build of the same code returned
+        200. Restart before debugging a ghost.</li>
+
+        <li><strong>The response cache is global.</strong> Cache-hit rate is a property of total
+        traffic, not per-customer traffic. Don't read it as a customer-level metric.</li>
+      </ul>
+    </section>
+
+    <section id="next">
+      <h2>What's next</h2>
+      <p class="lede">Each addition has a trigger. Don't do them early.</p>
+
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Do this</th><th>When</th></tr></thead>
+          <tbody>
+            <tr><td>Fill in real bank details, or wire Stripe/Revolut</td><td>Before the first real customer pays</td></tr>
+            <tr><td>Implement <code>getGateway()</code> + schedule the reconciliation cron</td><td>Self-serve signup</td></tr>
+            <tr><td>Send the balance-alert emails the state machine already records</td><td>Any paying customer</td></tr>
+            <tr><td>A real provider behind the same client interface</td><td>Before launch — it's a mock today</td></tr>
+            <tr><td><code>subscriptions</code> table</td><td>Recurring products (Stream, reward plan) — one row per product</td></tr>
+            <tr><td>Redis for rate limits and queues</td><td>Limit checks show up in latency (~hundreds of req/s)</td></tr>
+            <tr><td>S3 for cached payloads</td><td><code>response_cache</code> outgrows instance RAM</td></tr>
+            <tr><td>Partitioning, then ClickHouse</td><td>Tens of millions of <code>api_requests</code> rows/month</td></tr>
+            <tr><td>Hosting + CI</td><td>Whenever it needs to be reachable — Railway/Render/Fly, or a Hetzner VPS</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="note">
+        <div class="note-title">The governing principle</div>
+        <p>
+          Design the schema for the end state, because it is expensive to change with live customers.
+          Deploy the infrastructure for the current one, because that is cheap to change. Everything
+          above slots in without touching the eleven tables.
+        </p>
+      </div>
+    </section>
+
+    <footer>
+      Skylark is an independent third-party service. Not affiliated with X Corp.
+      “Twitter” and “X” are trademarks of X Corp.
+    </footer>
+  </main>
+</div>

@@ -1,6 +1,7 @@
-import CodeCard from "@/components/CodeCard";
-import Faq from "@/components/Faq";
-import Header from "@/components/Header";
+import Link from "next/link";
+import CodeCard from "@/components/marketing/CodeCard";
+import Faq from "@/components/marketing/Faq";
+import Header from "@/components/marketing/Header";
 
 const features = [
   {
@@ -208,9 +209,12 @@ export default function Home() {
             </div>
           ))}
         </div>
-        <a href="#" className="mt-8 inline-block font-semibold text-blue-600 hover:text-blue-700">
-          All 75+ endpoints →
-        </a>
+        <Link
+          href="/dashboard/docs"
+          className="mt-8 inline-block font-semibold text-blue-600 hover:text-blue-700"
+        >
+          Read the API reference →
+        </Link>
       </section>
 
       {/* Pricing */}
