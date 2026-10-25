@@ -113,6 +113,26 @@ export const apiKeys = pgTable(
   (t) => [index("api_keys_org_idx").on(t.orgId)],
 );
 
+// ── Streams ───────────────────────────────────────────────────────────
+
+/**
+ * What an organization wants the stream to deliver. `value` is the topic the
+ * upstream filters on; `tag` is the customer's own label, echoed back on every
+ * matching post so one connection can serve several consumers. Rules belong to
+ * the org rather than to a key, so rotating a key doesn't lose them.
+ */
+export const streamRules = pgTable(
+  "stream_rules",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    orgId: uuid("org_id").notNull().references(() => organizations.id),
+    value: text("value").notNull(),
+    tag: text("tag"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [uniqueIndex("stream_rules_org_value_idx").on(t.orgId, t.value)],
+);
+
 // ── Money ─────────────────────────────────────────────────────────────
 
 // Append-only; source of truth for balance. Debits happen in the same

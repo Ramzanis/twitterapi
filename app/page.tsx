@@ -31,7 +31,7 @@ const streamSteps = [
   },
   {
     title: "Matches arrive as they happen",
-    text: "Take the stream over websockets or webhooks, whichever fits your stack.",
+    text: "Hold one WebSocket for every rule, each post tagged with the rule it matched.",
   },
   {
     title: "Under half a second at the median",
@@ -42,15 +42,18 @@ const streamSteps = [
 const endpointGroups = [
   { name: "Tweets", endpoints: ["/tweet/search", "/tweet/replies", "/tweet/quotes", "/tweet/thread"] },
   { name: "Users", endpoints: ["/user/profile", "/user/tweets", "/user/followers", "/user/following"] },
-  { name: "Streams", endpoints: ["/stream", "/stream/rules", "/webhooks", "/stream/backfill"] },
+  { name: "Streams", endpoints: ["/stream", "/stream/rules", "/stream/backfill"] },
   { name: "Discovery", endpoints: ["/trends", "/lists/tweets", "/spaces", "/media/lookup"] },
 ];
+
+/** Counted, not typed, so the figure can't drift from the list above. */
+const endpointCount = endpointGroups.reduce((n, group) => n + group.endpoints.length, 0);
 
 const stats = [
   { value: "1,000+", label: "requests per second" },
   { value: "248 ms", label: "median latency" },
   { value: "99.99%", label: "uptime" },
-  { value: "75+", label: "endpoints" },
+  { value: String(endpointCount), label: "endpoints" },
 ];
 
 export default function Home() {
@@ -143,39 +146,42 @@ export default function Home() {
                 </li>
               ))}
             </ol>
-            <a href="#docs" className="mt-8 inline-block font-semibold text-blue-600 hover:text-blue-700">
+            <Link
+              href="/dashboard/docs/streaming"
+              className="mt-8 inline-block font-semibold text-blue-600 hover:text-blue-700"
+            >
               Streaming reference →
-            </a>
+            </Link>
           </div>
           <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
             <div className="flex justify-between border-b border-slate-100 px-5 py-3.5 font-mono text-xs text-slate-500">
-              <span>wss://stream.skylark.dev/v1</span>
+              <span>wss://stream.skylark.dev/stream</span>
               <span className="text-emerald-600">● live</span>
             </div>
             <div className="flex flex-col gap-2.5 px-5 py-4 font-mono text-xs text-slate-600">
               <div className="flex gap-3">
                 <span className="text-blue-600">12:04:31</span>
-                <span>tweet.created</span>
+                <span>post · research</span>
                 <span className="ml-auto">184 ms</span>
               </div>
               <div className="flex gap-3">
                 <span className="text-blue-600">12:04:31</span>
-                <span>tweet.created</span>
+                <span>post · competitors</span>
                 <span className="ml-auto">201 ms</span>
               </div>
               <div className="flex gap-3">
                 <span className="text-blue-600">12:04:32</span>
-                <span>user.followed</span>
+                <span>post · research</span>
                 <span className="ml-auto">173 ms</span>
               </div>
               <div className="flex gap-3 opacity-60">
                 <span className="text-blue-600">12:04:32</span>
-                <span>tweet.repost</span>
+                <span>post · launches</span>
                 <span className="ml-auto">192 ms</span>
               </div>
               <div className="flex gap-3 opacity-30">
                 <span className="text-blue-600">12:04:33</span>
-                <span>tweet.created</span>
+                <span>post · research</span>
                 <span className="ml-auto">166 ms</span>
               </div>
             </div>
@@ -191,7 +197,7 @@ export default function Home() {
             never shipped.
           </h2>
           <span className="text-sm whitespace-nowrap text-slate-500">
-            Reads, writes, streams
+            Reads and streams
           </span>
         </div>
         <div className="mt-10 grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
@@ -249,7 +255,7 @@ export default function Home() {
               <div className="mt-3 text-4xl font-semibold tracking-tight">$0.15</div>
               <div className="mt-1 text-sm text-slate-500">per 1,000 reads</div>
               <ul className="mt-6 space-y-2 text-[15px] text-slate-700">
-                <li>All 75+ endpoints</li>
+                <li>All {endpointCount} endpoints</li>
                 <li>1,000+ req / sec</li>
                 <li>MCP server included</li>
                 <li>24/7 support</li>

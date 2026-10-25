@@ -1,0 +1,342 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Skylark Architecture</title>
+<style>
+  :root {
+    --ground: #ffffff; --surface: #f5f8fc; --ink: #101a2b; --ink-2: #33445e; --muted: #5d6f8a;
+    --line: #dde5ef; --accent: #1d4ed8; --accent-soft: #e8eefc;
+    --body: "Segoe UI", system-ui, -apple-system, sans-serif;
+    --mono: "Cascadia Mono", ui-monospace, Consolas, monospace;
+    color-scheme: light;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --ground: #0a1020; --surface: #101a2e; --ink: #dfe7f4; --ink-2: #b3c2d8; --muted: #8397b3;
+      --line: #1f2d45; --accent: #7ea7ff; --accent-soft: #16233f; color-scheme: dark; }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--ground); color: var(--ink); font: 16px/1.6 var(--body); }
+  header { background: var(--surface); border-bottom: 1px solid var(--line); }
+  .wrap { max-width: 1180px; margin: 0 auto; padding: 0 24px; }
+  header .wrap { padding-block: 36px 30px; }
+  .eyebrow { font: 12px var(--mono); letter-spacing: .12em; text-transform: uppercase; color: var(--muted); }
+  h1 { font-size: clamp(28px, 4vw, 40px); margin: 8px 0 0; letter-spacing: -.02em; }
+  .lede { color: var(--ink-2); max-width: 70ch; margin: 10px 0 0; }
+  nav { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 18px; }
+  nav a { font-size: 14px; color: var(--accent); text-decoration: none; border: 1px solid var(--line);
+    border-radius: 20px; padding: 3px 12px; background: var(--ground); }
+  main .wrap { padding-block: 32px 80px; }
+  section { margin-bottom: 56px; scroll-margin-top: 16px; }
+  h2 { font-size: 23px; margin: 0 0 4px; letter-spacing: -.01em; }
+  .sub { color: var(--muted); margin: 0 0 18px; max-width: 75ch; }
+  .diagram { border: 1px solid var(--line); border-radius: 12px; background: var(--surface); padding: 20px;
+    overflow-x: auto; }
+  .diagram pre.mermaid { margin: 0; min-width: 640px; text-align: center; background: transparent; }
+  .notes { display: grid; gap: 12px; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); margin-top: 16px; }
+  .note { border: 1px solid var(--line); border-radius: 10px; padding: 14px 16px; }
+  .note b { display: block; margin-bottom: 4px; }
+  .note p { margin: 0; font-size: 14px; color: var(--ink-2); }
+  code { font: .88em var(--mono); background: var(--accent-soft); padding: 1px 5px; border-radius: 4px; }
+  table { width: 100%; border-collapse: collapse; font-size: 14px; }
+  .table-wrap { overflow-x: auto; border: 1px solid var(--line); border-radius: 10px; }
+  th, td { text-align: left; padding: 9px 12px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { font: 11px var(--mono); letter-spacing: .08em; text-transform: uppercase; color: var(--muted); background: var(--surface); }
+  tr:last-child td { border-bottom: 0; }
+  .fallback { color: var(--muted); font-size: 14px; }
+</style>
+</head>
+<body>
+<header>
+  <div class="wrap">
+    <div class="eyebrow">Skylark · architecture</div>
+    <h1>How the whole system fits together</h1>
+    <p class="lede">Customers call a metered API with an API key. Every call is authenticated, rate-limited,
+      checked against the credit balance, served from cache or fetched from the upstream provider, then
+      logged and billed in one database transaction. The WebSocket stream delivers posts live, billed
+      the same way. The only incoming webhook is the payment provider's.</p>
+    <nav>
+      <a href="#processes">Processes</a>
+      <a href="#request">A metered call</a>
+      <a href="#realtime">Streaming</a>
+      <a href="#money">Money</a>
+      <a href="#data">Data model</a>
+      <a href="#code">Where the code lives</a>
+    </nav>
+  </div>
+</header>
+
+<main><div class="wrap">
+
+<section id="processes">
+  <h2>1. Processes and how they talk</h2>
+  <p class="sub">Three programs run locally: the Next.js app, the realtime server, and Driftnet (the mock
+    data provider, in a separate repo). All state is in one Postgres database.</p>
+  <div class="diagram"><pre class="mermaid">
+flowchart LR
+  subgraph Customers
+    browser["Browser<br/>landing · dashboard · docs"]
+    app["Customer's code<br/>REST calls · WebSocket client"]
+  end
+
+  subgraph Skylark["Skylark (this repo)"]
+    next["Next.js app :3000<br/>pages · server actions · /api/x/*"]
+    rt["Realtime server :3001<br/>pnpm stream<br/>WebSocket gateway"]
+  end
+
+  pg[("Postgres :5432<br/>Docker · 12 tables")]
+  drift["Driftnet :4000<br/>mock provider · ../driftnet<br/>REST · WebSocket · backfill"]
+  google["Google OAuth"]
+  gateway["Stripe / Revolut<br/>(seam only, not wired)"]
+
+  browser -- "HTTPS, session cookie" --> next
+  app -- "HTTPS, X-API-Key" --> next
+  app -- "WebSocket, X-API-Key" --> rt
+
+  next -- "SQL" --> pg
+  rt -- "SQL" --> pg
+  next -- "HTTP, X-Provider-Key<br/>retries + timeouts" --> drift
+  rt -- "WebSocket per rule" --> drift
+  rt -- "HTTP backfill" --> drift
+  next -- "sign-in" --> google
+  gateway -. "payment webhook: invoice paid<br/>(returns 503 until configured)" .-> next
+  </pre></div>
+  <div class="notes">
+    <div class="note"><b>Why two Skylark processes</b><p>Next.js route handlers can't hold a socket open
+      open, so the WebSocket gateway lives in <code>server/stream.ts</code>.</p></div>
+    <div class="note"><b>Swapping the provider</b><p>All upstream calls go through <code>lib/providers/</code>.
+      A paid scraper means a new <code>PROVIDER_BASE_URL</code> and key, plus response mapping if its shape differs.</p></div>
+    <div class="note"><b>Single instance for now</b><p>The rate limiter and stream connection counts are
+      in-process. Running two copies needs Redis first.</p></div>
+  </div>
+</section>
+
+<section id="request">
+  <h2>2. One metered REST call</h2>
+  <p class="sub">All 13 data endpoints run this same pipeline, in <code>lib/meteredEndpoint.ts</code>. Each
+    route file only validates its parameters and names a provider call.</p>
+  <div class="diagram"><pre class="mermaid">
+sequenceDiagram
+  autonumber
+  participant C as Customer
+  participant R as Route /api/x/…
+  participant M as serveMetered()
+  participant DB as Postgres
+  participant P as Driftnet
+
+  C->>R: GET /api/x/user/profile?username=… (X-API-Key)
+  R->>M: endpoint, parse(), fetch()
+  M->>DB: look up SHA-256(key) → org, plan
+  Note over M: 401 bad key · 403 suspended org
+  M->>M: validate params (400, not logged)
+  M->>M: rate limit per key (429, logged at $0)
+  M->>DB: balance ≥ price? (402, logged at $0)
+  M->>DB: response_cache hit?
+  alt cache hit
+    DB-->>M: payload (costs us nothing, still billed)
+  else miss
+    M->>DB: insert fetch_jobs (running)
+    M->>P: HTTP with timeout, retries, backoff
+    P-->>M: data, or 404 / failure
+    M->>DB: cache payload · fetch_jobs succeeded, cost × attempts
+    Note over M: upstream failure → 502, 404 → 404, both $0
+  end
+  M->>DB: ONE transaction: insert api_requests + debit credit_ledger
+  M-->>C: { data, meta: cache_hit, credits_charged, balance, latency }
+  </pre></div>
+</section>
+
+<section id="realtime">
+  <h2>3. The stream</h2>
+  <p class="sub">Customers write stream rules (topics), hold one WebSocket, and receive matching posts. Each
+    post is billed as it is delivered; backfill covers anything missed while disconnected.</p>
+  <div class="diagram"><pre class="mermaid">
+flowchart TB
+  rules[("stream_rules<br/>topic + tag, per org")]
+
+  subgraph WS["WebSocket — customer holds a connection"]
+    direction TB
+    w1["Customer connects to ws://…:3001/stream"] --> w2["Auth key · plan connection limit · balance"]
+    w2 --> w3["One upstream Driftnet socket per rule<br/>rules re-read every 15s"]
+    w3 --> w4["Each post: log + debit in one transaction,<br/>then send {type: post, rule, cursor, data}"]
+    w4 --> w5{"Balance covers<br/>next post?"}
+    w5 -- yes --> w4
+    w5 -- no --> w6["close 4402<br/>customer tops up, reconnects, backfills"]
+  end
+
+  rules --> w3
+  bf["GET /api/x/stream/backfill<br/>catch up after a drop"] -.-> rules
+  </pre></div>
+  <div class="notes">
+    <div class="note"><b>Nothing is skipped</b><p>If the upstream socket drops, the gateway reconnects and seeks back
+      to the last post it delivered.</p></div>
+    <div class="note"><b>Catching up</b><p>After a customer disconnects, backfill returns what their rule matched
+      since their last cursor (Driftnet keeps nearly three hours).</p></div>
+    <div class="note"><b>Plan limits</b><p>Rules and concurrent connections are capped per plan:
+      <code>maxStreamRules</code>, <code>maxStreamConnections</code>.</p></div>
+  </div>
+</section>
+
+<section id="money">
+  <h2>4. How money moves</h2>
+  <p class="sub">The balance is never stored. It is the newest ledger row per bucket, and every writer
+    locks the organization row first.</p>
+  <div class="diagram"><pre class="mermaid">
+flowchart LR
+  signup["First sign-in<br/>$0.10 bonus"] --> bonus[("ledger: bonus bucket")]
+  topup["Top-up request<br/>bank reference"] --> staff["Staff: Mark paid<br/>(admin console)"]
+  gw["Payment provider webhook<br/>invoice paid (not wired yet)"] -.-> credit
+  staff --> credit["Credit exactly once<br/>event id · status guard · unique source_id"]
+  credit --> paid[("ledger: paid bucket")]
+  adj["Staff adjustment"] --> paid
+
+  usage["REST call · stream post"] --> debit["debitCredits()<br/>bonus first, then paid"]
+  debit --> bonus
+  debit --> paid
+  usage --> log[("api_requests<br/>same transaction")]
+  bonus & paid --> alerts["Low-balance alerts<br/>$10 · $5 · $1 · $0<br/>(recorded, email not sent)"]
+  </pre></div>
+</section>
+
+<section id="data">
+  <h2>5. Data model</h2>
+  <p class="sub">Twelve tables, defined in <code>db/schema.ts</code>. Everything belongs to an organization,
+    never to a user. Plans, prices and providers are config in code, not tables.</p>
+  <div class="diagram"><pre class="mermaid">
+erDiagram
+  users ||--o{ organization_members : "belongs to"
+  organizations ||--o{ organization_members : has
+  organizations ||--o{ api_keys : owns
+  organizations ||--o{ stream_rules : owns
+  organizations ||--o{ credit_ledger : "balance from"
+  organizations ||--o{ topup_requests : requests
+  topup_requests ||--o| credit_ledger : "credits once"
+  organizations ||--o{ api_requests : "usage"
+  api_keys ||--o{ api_requests : made
+  api_requests ||--o{ fetch_jobs : "may trigger"
+  organizations ||--o{ audit_logs : "activity"
+
+  users {
+    uuid id PK
+    text google_sub
+    text email
+    bool is_staff
+  }
+  organizations {
+    uuid id PK
+    text plan_code
+    jsonb plan_overrides
+    text status
+  }
+  organization_members {
+    uuid org_id FK
+    uuid user_id FK
+    text role
+  }
+  api_keys {
+    uuid id PK
+    uuid org_id FK
+    text key_hash
+    text environment
+    text status
+  }
+  stream_rules {
+    uuid id PK
+    uuid org_id FK
+    text value
+    text tag
+  }
+  credit_ledger {
+    bigint id PK
+    uuid org_id FK
+    text bucket
+    int amount_micros
+    int balance_after_micros
+    text source_id
+  }
+  topup_requests {
+    uuid id PK
+    uuid org_id FK
+    int amount_cents
+    int amount_received_cents
+    text status
+  }
+  webhook_events {
+    uuid id PK
+    text provider
+    text event_id
+    bool signature_valid
+  }
+  api_requests {
+    uuid id PK
+    uuid org_id
+    uuid api_key_id
+    text endpoint
+    int status_code
+    int credits_cost_micros
+    bool cache_hit
+  }
+  fetch_jobs {
+    uuid id PK
+    text provider_code
+    text endpoint
+    text status
+    int attempts
+    int upstream_cost_micros
+  }
+  response_cache {
+    text params_hash PK
+    jsonb payload
+    timestamptz expires_at
+    int hit_count
+  }
+  audit_logs {
+    bigint id PK
+    uuid org_id
+    uuid actor_user_id
+    text action
+    jsonb metadata
+  }
+  </pre></div>
+  <p class="fallback"><code>webhook_events</code> (incoming payment-provider webhooks) and <code>response_cache</code> (shared
+    across organizations) stand alone.</p>
+</section>
+
+<section id="code">
+  <h2>6. Where the code lives</h2>
+  <div class="table-wrap"><table>
+    <thead><tr><th>Path</th><th>What it does</th></tr></thead>
+    <tbody>
+      <tr><td><code>app/page.tsx</code>, <code>app/signin</code></td><td>Landing page and sign-in</td></tr>
+      <tr><td><code>app/dashboard/*</code></td><td>Customer area: usage, keys, billing, account, docs</td></tr>
+      <tr><td><code>app/admin/*</code></td><td>Staff console: revenue, margin, orgs, top-up queue, audit feed</td></tr>
+      <tr><td><code>app/api/x/*</code></td><td>Public API: 13 metered GETs and stream rules</td></tr>
+      <tr><td><code>app/api/webhooks/[provider]</code>, <code>app/api/cron/*</code></td><td>Incoming payment webhook (invoice paid) and the reconciliation job</td></tr>
+      <tr><td><code>server/stream.ts</code></td><td>Realtime server: the WebSocket gateway</td></tr>
+      <tr><td><code>lib/meteredEndpoint.ts</code></td><td>The shared pipeline every data endpoint runs</td></tr>
+      <tr><td><code>lib/providers/*</code></td><td>Upstream HTTP client and response mapping</td></tr>
+      <tr><td><code>lib/ledger.ts</code>, <code>lib/billing.ts</code></td><td>Balances, debits, top-up fulfilment</td></tr>
+      <tr><td><code>config/*</code></td><td>Plans, prices, providers, endpoint catalog (drives docs and OpenAPI)</td></tr>
+      <tr><td><code>db/schema.ts</code>, <code>db/migrations</code></td><td>Tables and numbered migrations</td></tr>
+      <tr><td><code>scripts/verify-*.ts</code></td><td>Checks for the ledger and top-ups</td></tr>
+    </tbody>
+  </table></div>
+</section>
+
+</div></main>
+
+<script src="https://cdn.jsdelivr.net/npm/mermaid@11.4.1/dist/mermaid.min.js"></script>
+<script>
+  if (window.mermaid) {
+    const dark = window.matchMedia("(prefers-color-scheme: dark)").matches;
+    mermaid.initialize({ startOnLoad: true, theme: dark ? "dark" : "default", securityLevel: "strict",
+      flowchart: { htmlLabels: true, curve: "basis" } });
+  } else {
+    document.querySelectorAll("pre.mermaid").forEach((el) => {
+      el.insertAdjacentHTML("beforebegin", '<p class="fallback">Diagrams need an internet connection to render (Mermaid loads from a CDN). The source below still reads top to bottom.</p>');
+    });
+  }
+</script>
+</body>
+</html>

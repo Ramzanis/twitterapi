@@ -161,7 +161,7 @@
     </p>
     <div class="meta-row">
       <span><b>Stack</b> Next.js 16 · React 19 · TypeScript · Postgres 17 · Drizzle</span>
-      <span><b>Tables</b> 11</span>
+      <span><b>Tables</b> 12</span>
       <span><b>Status</b> local only, no production deploy</span>
     </div>
   </div>
@@ -193,8 +193,8 @@
           <p>The product: landing page, Google sign-in, customer dashboard, staff console, and the metered API itself. Runs on :3000.</p>
         </div>
         <div class="card">
-          <h4>skylark-mock-provider</h4>
-          <p>A sibling directory standing in for the paid scraper. Real HTTP, auth, pagination, rate limits, injectable faults. Zero dependencies. Runs on :4000.</p>
+          <h4>driftnet</h4>
+          <p>A sibling directory standing in for the paid scraper. Real HTTP, auth, pagination, rate limits, injectable faults. A Cloudflare Worker, run locally with wrangler. Runs on :4000.</p>
         </div>
       </div>
 
@@ -234,7 +234,7 @@ pnpm db:up            <span class="c"># Postgres 17 in Docker</span>
 pnpm db:migrate       <span class="c"># apply db/migrations/*.sql</span>
 
 <span class="c"># 2 — upstream data provider (separate directory)</span>
-cd ../skylark-mock-provider && node server.js
+cd ../driftnet && npm run dev
 
 <span class="c"># 3 — the app</span>
 pnpm dev              <span class="c"># http://localhost:3000</span></pre>
@@ -276,7 +276,7 @@ pnpm dev              <span class="c"># http://localhost:3000</span></pre>
   dashboard/          <span class="c">customer area — usage, billing, payment-methods, account</span>
   admin/              <span class="c">staff console (+ orgs/[id])</span>
   api/
-    x/tweet/search/   <span class="c">the metered endpoint</span>
+    x/                <span class="c">13 metered endpoints + stream rules, via lib/meteredEndpoint.ts</span>
     webhooks/[provider]/   <span class="c">payment gateway callback</span>
     cron/reconcile-topups/ <span class="c">safety net for lost webhooks</span>
     usage/export/     <span class="c">CSV</span>
@@ -297,7 +297,7 @@ scripts/     seed · make-staff · verify-ledger · verify-topup</pre>
 
     <section id="data">
       <h2>Data model</h2>
-      <p class="lede">Eleven tables. Everything hangs off an organization, never a user.</p>
+      <p class="lede">Twelve tables. Everything hangs off an organization, never a user.</p>
 
       <div class="table-wrap">
         <table>
@@ -307,6 +307,7 @@ scripts/     seed · make-staff · verify-ledger · verify-topup</pre>
             <tr><td><code>organizations</code></td><td>Plan, status, billing identity, spend caps, alert memory. The billing unit.</td></tr>
             <tr><td><code>organization_members</code></td><td>owner / admin / member</td></tr>
             <tr><td><code>api_keys</code></td><td>SHA-256 hash plus a display prefix. Live or test.</td></tr>
+            <tr><td><code>stream_rules</code></td><td>Topics an org streams, with an optional tag. Unique per org; capped per plan.</td></tr>
             <tr><td><code>credit_ledger</code></td><td>Append-only. The source of truth for balance.</td></tr>
             <tr><td><code>api_requests</code></td><td>One row per call, <em>including</em> rejected ones at zero cost.</td></tr>
             <tr><td><code>fetch_jobs</code></td><td>One row per upstream call. Attempts, cost, failure kind.</td></tr>
@@ -413,7 +414,8 @@ scripts/     seed · make-staff · verify-ledger · verify-topup</pre>
             <tr><td>Balance alert emails</td><td><span class="chip chip-warn">partial</span></td><td>State machine works and audits; no email is sent</td></tr>
             <tr><td>Provider failover</td><td><span class="chip chip-off">not built</span></td><td><code>pickProvider()</code> always returns the one provider</td></tr>
             <tr><td>Team invitations</td><td><span class="chip chip-off">not built</span></td><td>Members table exists; no invite flow</td></tr>
-            <tr><td>Streams / webhooks product</td><td><span class="chip chip-off">not built</span></td><td>Advertised on the landing page only</td></tr>
+            <tr><td>Streams</td><td><span class="chip chip-warn">skeleton</span></td><td>Rules, WebSocket gateway (<code>pnpm stream</code>), per-post billing, backfill. Single process; stream upstream cost not costed</td></tr>
+            <tr><td>Customer webhooks</td><td><span class="chip chip-off">not planned</span></td><td>Customers use the WebSocket or backfill. The only incoming webhook is the payment provider's</td></tr>
             <tr><td>Usage rollups</td><td><span class="chip chip-off">not built</span></td><td>Dashboards aggregate <code>api_requests</code> directly — fine at this volume</td></tr>
             <tr><td>Deployment</td><td><span class="chip chip-off">not built</span></td><td>No hosting, no Dockerfile, no CI</td></tr>
           </tbody>
@@ -421,8 +423,9 @@ scripts/     seed · make-staff · verify-ledger · verify-topup</pre>
       </div>
 
       <p>
-        Only one API endpoint exists — <code>/api/x/tweet/search</code>. The landing page advertises
-        75+; treat that as marketing copy, not a claim about the codebase.
+        Every endpoint the landing page lists exists: 12 REST reads, stream rules, backfill and the
+        WebSocket. Each REST route only validates parameters and names a provider call;
+        <code>lib/meteredEndpoint.ts</code> holds the money invariants for all of them.
       </p>
     </section>
 
@@ -438,13 +441,13 @@ npx tsx scripts/verify-topup.ts    <span class="c"># exactly-once fulfilment + p
       fulfilments credit once, and $50 requested with $48.70 captured credits $48.70.</p>
 
       <h3>Provoking failure</h3>
-      <p>Restart the provider in a fault mode and call the API — these paths are otherwise untestable:</p>
-      <pre>cd ../skylark-mock-provider
-npm run flaky                          <span class="c"># 30% fail  → retries, 502, no charge</span>
-FAIL_RATE=1 node server.js             <span class="c"># always fails → fetch_jobs = failed, 3 attempts</span>
-BASE_LATENCY_MS=9000 node server.js    <span class="c"># slower than timeout → timed_out</span></pre>
-      <p>Per-request faults work too: <code>_fail</code>, <code>_status</code>, <code>_latency</code>,
-      <code>_hang</code>, <code>_truncate</code>, <code>_empty</code>. See that project's README.</p>
+      <p>Add a fault parameter to a provider request — these paths are otherwise untestable, and no restart is needed:</p>
+      <pre>_fail=1          <span class="c"># 503 every try → retries, fetch_jobs = failed, 3 attempts, 502, no charge</span>
+_fail=0.3        <span class="c"># ~30% fail → retries usually recover</span>
+_latency=9000    <span class="c"># slower than the 5s timeout → timed_out</span></pre>
+      <p>Also <code>_status</code>, <code>_hang</code>, <code>_truncate</code> and <code>_empty</code>.
+      To make every call misbehave, set <code>FAIL_RATE</code> or <code>BASE_LATENCY_MS</code> in
+      <code>../driftnet/wrangler.toml</code> and restart it. See that project's README.</p>
     </section>
 
     <section id="traps">
@@ -504,7 +507,7 @@ BASE_LATENCY_MS=9000 node server.js    <span class="c"># slower than timeout →
         <p>
           Design the schema for the end state, because it is expensive to change with live customers.
           Deploy the infrastructure for the current one, because that is cheap to change. Everything
-          above slots in without touching the eleven tables.
+          above slots in without touching the twelve tables.
         </p>
       </div>
     </section>

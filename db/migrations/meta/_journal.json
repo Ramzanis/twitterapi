@@ -29,6 +29,13 @@
       "when": 1788114016664,
       "tag": "0003_payment_dedupe_and_processing_state",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1792363899357,
+      "tag": "0004_stream_rules",
+      "breakpoints": true
     }
   ]
 }

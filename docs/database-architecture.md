@@ -4,7 +4,7 @@ Data model and storage plan for Skylark: a third-party X/Twitter data API. Custo
 
 **Strategy:** design the schema for the end state (expensive to change with live customers), deploy minimal infrastructure for the current one (cheap to upgrade). Day one is a single Postgres; everything else is added when a measured trigger fires.
 
-**Simplicity rule:** the Phase 0 core is **9 tables**. Anything that would be a 1:1 table becomes columns; anything that changes rarely and has no runtime state becomes config in code; anything serving a feature that hasn't shipped isn't created yet.
+**Simplicity rule:** the Phase 0 core is **12 tables** (9 at first, plus `topup_requests` and `webhook_events` for payments and `stream_rules` for streams). Anything that would be a 1:1 table becomes columns; anything that changes rarely and has no runtime state becomes config in code; anything serving a feature that hasn't shipped isn't created yet.
 
 ## Phase 0 stack (first ~1–5 customers)
 
@@ -106,7 +106,7 @@ This is also why no `payment_methods` table exists: with bank transfer there is 
 | `plans`, `endpoint_pricing`, `providers` as tables | You need runtime editing or an admin UI for them |
 | `usage_rollups_daily` | Dashboard queries over `api_requests` get slow |
 | `invitations` | Teams plan ships (inviting people who don't have accounts yet) |
-| `stream_rules`, `webhook_endpoints`, `webhook_deliveries` (+ outbox) | Streaming/webhook product ships |
+| `stream_rules` | Streaming ships (done) |
 | `idempotency_keys` | You add write endpoints customers retry |
 | `user_agreements` (full acceptance history) | Lawyers ask for more than the current-version columns on `users` |
 
@@ -123,9 +123,9 @@ Fee reality: Stripe is ~1.5% + €0.25 for EEA consumer cards (more for UK/inter
 
 ## Implementation status (local, mocked)
 
-The upstream data source is a **separate service** (`skylark-mock-provider`, a sibling directory) that speaks real HTTP with auth, pagination, rate limiting and injectable faults. The client in `lib/providers/client.ts` therefore exercises genuine request building, timeouts, retries with backoff, and error classification — so swapping in a paid scraper is a base URL and a key. `fetch_jobs` distinguishes `failed` from `timed_out`, records the attempt count, and bills `upstream_cost_micros` for **every** attempt including retries, which keeps the admin console's margin figure honest. A failed upstream never charges the customer: the 502 is logged to `api_requests` at zero cost.
+The upstream data source is a **separate service** (`driftnet`, a sibling directory) that speaks real HTTP with auth, pagination, rate limiting and injectable faults. The client in `lib/providers/client.ts` therefore exercises genuine request building, timeouts, retries with backoff, and error classification — so swapping in a paid scraper is a base URL and a key. `fetch_jobs` distinguishes `failed` from `timed_out`, records the attempt count, and bills `upstream_cost_micros` for **every** attempt including retries, which keeps the admin console's margin figure honest. A failed upstream never charges the customer: the 502 is logged to `api_requests` at zero cost.
 
-Built and verified end to end against a local Postgres: all 9 tables (`db/schema.ts`), sign-in with provisioning, the customer dashboard, API-key auth, in-process rate limiting, the response cache, the append-only ledger with row-locked debits, and `/api/x/tweet/search`. Data comes from a fixture provider (`lib/providers/mock.ts`) and top-ups are manual ledger inserts — no scraper and no payment provider are wired up.
+Built and verified end to end against a local Postgres: all 12 tables (`db/schema.ts`), sign-in with provisioning, the customer dashboard, API-key auth, in-process rate limiting, the response cache, the append-only ledger with row-locked debits, and the 13 metered endpoints under `/api/x` plus the stream gateway. Data comes from the `driftnet` mock provider and top-ups are requested by the customer and marked paid by staff — no real scraper and no payment provider are wired up.
 
 **Sign-in and provisioning.** Auth.js v5 with JWT sessions, so no session or account tables are needed — `users` alone is enough, as the schema assumed. First sign-in runs `provisionIdentity()`: user, personal organization on the free plan, owner membership, the $0.10 signup bonus as a ledger entry, and an `org.created` audit row, all in one transaction, keyed idempotently on the Google subject id. **No API key is minted at signup** — a key is only ever displayable at the moment it is created, so the first key is created explicitly from the dashboard, which shows it once. Google OAuth activates as soon as `AUTH_GOOGLE_ID`/`AUTH_GOOGLE_SECRET` are set; without them, dev builds fall back to a local email login that production refuses to register.
 
@@ -133,7 +133,7 @@ Built and verified end to end against a local Postgres: all 9 tables (`db/schema
 
 One deliberate deviation from the lifecycle below: on a cache miss the API **calls the provider synchronously** and writes the `fetch_jobs` row as a record of the upstream call, rather than queueing it. A search endpoint has to return data in the same request, so the queue-and-worker split (`SKIP LOCKED`) only becomes necessary for genuinely async work — bulk exports, backfill, stream ingestion. The table is already shaped for both.
 
-**Admin console.** `/admin` is gated on `users.is_staff`, re-read from the database on each request rather than trusted from the session token. It reads the same 9 tables to show revenue, upstream cost from `fetch_jobs`, gross margin, outstanding credit liability (the sum of each org's latest ledger balance — what we owe in unused credits), and per-provider totals for reconciling supplier invoices. Staff can change an org's plan, suspend it, and move credits; credit moves append to `credit_ledger` through the same locked path as usage, so the balance stays derived from one auditable chain. Every mutation writes an `audit_logs` row, which is what makes that table earn its place instead of separate history tables.
+**Admin console.** `/admin` is gated on `users.is_staff`, re-read from the database on each request rather than trusted from the session token. It reads the same tables to show revenue, upstream cost from `fetch_jobs`, gross margin, outstanding credit liability (the sum of each org's latest ledger balance — what we owe in unused credits), and per-provider totals for reconciling supplier invoices. Staff can change an org's plan, suspend it, and move credits; credit moves append to `credit_ledger` through the same locked path as usage, so the balance stays derived from one auditable chain. Every mutation writes an `audit_logs` row, which is what makes that table earn its place instead of separate history tables.
 
 **Migrations.** The schema is the source of truth in `db/schema.ts`; `drizzle-kit generate` diffs it into versioned SQL under `db/migrations`, committed to git, and `drizzle-kit migrate` applies them. The database has been rebuilt from those files from empty to verify they work. Indexes were added at the same time — notably `credit_ledger (org_id, id desc)`, which serves the balance lookup on every billable request, and `api_requests (org_id, created_at desc)` for the dashboards.
 

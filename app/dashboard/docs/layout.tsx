@@ -21,11 +21,18 @@ export default function DocsLayout({ children }: { children: React.ReactNode }) 
     },
     ...groupedEndpoints().map((group) => ({
       title: group.group,
-      items: group.endpoints.map((endpoint) => ({
-        href: `/dashboard/docs/api-reference/${endpoint.slug}`,
-        label: endpoint.summary,
-        method: endpoint.method,
-      })),
+      items: [
+        // The WebSocket is not a catalog entry — it is not a GET — so its guide
+        // leads the section the catalog builds for it.
+        ...(group.group === "Streams"
+          ? [{ href: "/dashboard/docs/streaming", label: "Streaming over WebSocket" }]
+          : []),
+        ...group.endpoints.map((endpoint) => ({
+          href: `/dashboard/docs/api-reference/${endpoint.slug}`,
+          label: endpoint.summary,
+          method: endpoint.method,
+        })),
+      ],
     })),
   ];
 

@@ -6,7 +6,7 @@ Paste the prompt below into Claude Design (or run `/design` and use it as the br
 
 Create a database architecture diagram for **Skylark**, a third-party X/Twitter data API service. One landscape artboard, clean SaaS engineering-doc style: light background, dark slate text, blue accent (#2563eb), soft sky-blue cluster backgrounds, rounded corners, JetBrains Mono for field names.
 
-Draw an entity-relationship diagram of the **9-table Phase 0 core**, grouped into color-coded clusters. Each table is a card with its name as a header and key fields listed (mark PK / FK). Connect related tables with labeled crow's-foot lines.
+Draw an entity-relationship diagram of the **12-table Phase 0 core**, grouped into color-coded clusters. Each table is a card with its name as a header and key fields listed (mark PK / FK). Connect related tables with labeled crow's-foot lines.
 
 **Cluster 1 — Identity (sky blue):**
 - users (id PK, google_sub, email, is_staff, tos_version, deleted_at)
@@ -16,9 +16,13 @@ Relationships: users 1—* organization_members *—1 organizations. Note: "ever
 
 **Cluster 2 — API access (indigo):**
 - api_keys (id PK, org_id FK, key_prefix, key_hash, environment: live/test, status, last_used_at)
+- stream_rules (id PK, org_id FK, value, tag) — annotate "topic the stream delivers; unique per org"
 
 **Cluster 3 — Money (green):**
 - credit_ledger (id PK, org_id FK, amount_micros, type: purchase/usage/refund/adjustment, reference, balance_after_micros) — annotate "append-only, source of truth for balance"
+- topup_requests (id PK, org_id FK, requested_by FK, amount_cents, amount_received_cents, status, provider, provider_payment_id, reference) — annotate "credit what was captured, not what was requested"
+- webhook_events (id PK, provider, event_id, event_type, signature_valid, processed_at) — annotate "(provider, event_id) unique: a retried delivery is ignored"
+Relationships: organizations 1—* topup_requests; a fulfilled top-up writes one credit_ledger row.
 
 **Cluster 4 — Usage (amber):**
 - api_requests (id PK, org_id FK, api_key_id FK, endpoint, status_code, credits_cost_micros, latency_ms, cache_hit) — annotate "plain table now; partition + purge later"
@@ -40,4 +44,4 @@ Relationships: users 1—* organization_members *—1 organizations. Note: "ever
 5. Result cached + returned
 6. api_requests logged + credit_ledger debited (same transaction)
 
-**Legend / footnotes (bottom):** deferred additions as dashed tags with their triggers — subscriptions (self-serve billing), usage_rollups_daily (dashboard slows), invitations (Teams ships), webhooks/streams tables (feature ships), Redis / S3 / ClickHouse (scale). Note: "the 9 core tables stay identical at every phase; billing columns are provider-agnostic (Stripe, Revolut, or manual invoicing)."
+**Legend / footnotes (bottom):** deferred additions as dashed tags with their triggers — subscriptions (self-serve billing), usage_rollups_daily (dashboard slows), invitations (Teams ships), customer webhooks (not planned), Redis / S3 / ClickHouse (scale). Note: "the 9 core tables stay identical at every phase; billing columns are provider-agnostic (Stripe, Revolut, or manual invoicing)."

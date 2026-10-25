@@ -22,7 +22,11 @@ export async function authenticate(request: Request): Promise<AuthResult> {
   if (!rawKey) {
     return { ok: false, status: 401, error: "Missing X-API-Key header" };
   }
+  return authenticateKey(rawKey);
+}
 
+/** The lookup itself, shared with the stream server, which has no Request. */
+export async function authenticateKey(rawKey: string): Promise<AuthResult> {
   const [row] = await db
     .select({ apiKey: tables.apiKeys, org: tables.organizations })
     .from(tables.apiKeys)

@@ -23,7 +23,8 @@ twitterapi/
 │   ├── admin/                      # Staff console (+ orgs/[id] detail)
 │   └── api/
 │       ├── auth/[...nextauth]/     # Auth.js handlers
-│       ├── x/tweet/search/route.ts # Metered API endpoint
+│       ├── x/                      # Metered API: tweet/, user/, trends, lists/,
+│       │                           # spaces, media/, stream/{rules,backfill}
 │       ├── usage/export/           # CSV export
 │       ├── webhooks/[provider]/    # Payment gateway webhook
 │       └── cron/reconcile-topups/  # Safety net for lost webhooks
@@ -42,6 +43,8 @@ twitterapi/
 │   └── billing.ts                  # Bank details, top-up presets
 ├── lib/
 │   ├── apiAuth.ts                  # API key hash → org + plan
+│   ├── meteredEndpoint.ts          # Shared pipeline every data endpoint runs
+│   ├── streamRules.ts              # Stream rule storage + plan limits
 │   ├── authz.ts                    # Session, requireUser, requireStaff
 │   ├── rateLimit.ts                # In-process limiter (Redis later)
 │   ├── ledger.ts                   # Append-only credit ledger, buckets
@@ -52,7 +55,12 @@ twitterapi/
 │   ├── payments/gateway.ts         # Stripe/Revolut seam (unimplemented)
 │   └── providers/
 │       ├── client.ts               # HTTP client: timeouts, retries, backoff
-│       └── tweets.ts               # Endpoint calls + response mapping
+│       ├── tweets.ts               # Endpoint calls + response mapping, per area:
+│       ├── users.ts                #   tweets, users, discovery, stream
+│       ├── discovery.ts
+│       └── stream.ts
+├── server/
+│   └── stream.ts                   # WebSocket stream gateway (pnpm stream)
 ├── db/
 │   ├── schema.ts                   # Table definitions — the source of truth
 │   ├── migrations/                 # Numbered, named, committed SQL
@@ -82,6 +90,14 @@ In a second terminal, start the upstream data provider — the API returns 502 w
 
 ```bash
 cd ../driftnet && npm run dev                    # http://localhost:4000
+```
+
+`PROVIDER_API_KEY` in `.env` must match driftnet's `BOOTSTRAP_API_KEY` (in `../driftnet/.dev.vars`), or every call is a 502 with a 401 from driftnet in `fetch_jobs.error`.
+
+For streams, a third terminal runs the WebSocket gateway — Next.js route handlers can't hold a socket open:
+
+```bash
+pnpm stream                                      # ws://localhost:3001/stream
 ```
 
 Open [http://localhost:3000](http://localhost:3000), click **Sign in**, and you land on the dashboard. Create a key there — it is shown once, because only its SHA-256 hash is stored.
@@ -117,7 +133,38 @@ The response `meta` block shows the metering in action:
 
 Call it twice with the same query: the second is a cache hit — roughly 7x faster, costs nothing upstream, and still bills the customer. That gap is the margin lever described in the architecture doc.
 
-Error paths: `401` missing/invalid or revoked key, `402` insufficient credits, `403` suspended organization, `429` over the plan's rate limit, `400` missing query.
+Error paths: `401` missing/invalid or revoked key, `402` insufficient credits, `403` suspended organization, `404` unknown post/user/list/media/rule (never billed), `429` over the plan's rate limit, `400` missing or malformed parameter.
+
+### Endpoints
+
+All `GET`, all under `/api/x`, all metered the same way. List endpoints return 20 items and a `next_cursor` to pass back as `?cursor=`.
+
+| Group | Endpoint | Parameters |
+|---|---|---|
+| Tweets | `/tweet/search` | `query` |
+| | `/tweet/replies`, `/tweet/quotes` | `tweet_id`, `cursor` |
+| | `/tweet/thread` | `tweet_id` |
+| Users | `/user/profile` | `username` |
+| | `/user/tweets`, `/user/followers`, `/user/following` | `username`, `cursor` |
+| Discovery | `/trends` | `location` (optional) |
+| | `/lists/tweets` | `list_id`, `cursor` |
+| | `/spaces` | `query` |
+| | `/media/lookup` | `media_id` |
+| Streams | `/stream/backfill` | `rule_id`, `cursor` (a stream sequence number) |
+
+Each route is a few lines: it validates its parameters and names a provider call, and [lib/meteredEndpoint.ts](lib/meteredEndpoint.ts) does the rest — auth, rate limit, balance, cache, `fetch_jobs`, and the request log and debit in one transaction. Adding an endpoint means a route, a price in [config/pricing.ts](config/pricing.ts), and a catalog entry in [config/endpoints.ts](config/endpoints.ts); the docs and OpenAPI pick it up from there.
+
+### Streams
+
+A skeleton, working end to end:
+
+- **Rules** — `GET/POST/DELETE /api/x/stream/rules`. A rule is a topic plus an optional tag, owned by the organization. Free; capped per plan (`maxStreamRules`).
+- **WebSocket** — `pnpm stream` serves `ws://localhost:3001/stream`. Authenticated with `X-API-Key` (or `?api_key=` for browsers), capped per plan (`maxStreamConnections`). It holds one upstream driftnet socket per rule, picks up rule changes within 15 seconds, reconnects upstream with backoff and seeks back to the last delivered post so nothing is skipped.
+- **Billing** — per post delivered, debited before sending, through the same ledger path as REST. When the balance can't cover the next post the connection closes with `4402`.
+- **Backfill** — `/stream/backfill` returns what a rule matched after a cursor, for catching up after a drop.
+
+Not done yet: connection counts live in the one process, so it can't scale horizontally; upstream stream cost isn't recorded in `fetch_jobs`, so the admin margin excludes streams; concurrent connections of one org can overdraw by up to one post each. Customers don't get webhooks: the only incoming webhook is the payment provider's, at `/api/webhooks/[provider]` (see Payments).
+
 
 ## The dashboard
 
@@ -231,6 +278,7 @@ Nothing credits an account except a signal we can verify. The browser redirect a
 
 ```bash
 pnpm dev      # Dev server
+pnpm stream   # WebSocket stream gateway on :3001
 pnpm build    # Production build
 pnpm start    # Serve the production build
 pnpm db:up    # Start local Postgres
@@ -240,7 +288,7 @@ pnpm staff    # Grant/revoke admin console access
 
 ## Architecture
 
-[docs/database-architecture.md](docs/database-architecture.md) covers the 9-table schema, the config-as-code decisions, the phased infrastructure plan (and what triggers each upgrade), and the Stripe-vs-Revolut billing analysis. [docs/claude-design-diagram-prompt.md](docs/claude-design-diagram-prompt.md) is a ready-to-paste brief for generating the ERD.
+[docs/architecture.html](docs/architecture.html) is the visual overview — processes, a metered call, the stream, money, and the data model — open it in a browser. [docs/database-architecture.md](docs/database-architecture.md) covers the 12-table schema, the config-as-code decisions, the phased infrastructure plan (and what triggers each upgrade), and the Stripe-vs-Revolut billing analysis. [docs/claude-design-diagram-prompt.md](docs/claude-design-diagram-prompt.md) is a ready-to-paste brief for generating the ERD.
 
 ---
 
